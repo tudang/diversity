@@ -3,11 +3,12 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <errno.h>
 
 #include "common.h"
-
+#include "application.h"
 
 struct state {
 	struct net_addr *target_addr;
@@ -52,7 +53,7 @@ void thread_loop(void *userdata) {
 		int i, bytes = 0;
 		for (i = 0; i < r; i++) {
 			struct mmsghdr *msg = &messages[i];
-			/* char *buf = msg->msg_hdr.msg_iov->iov_base; */
+			// char *buf = msg->msg_hdr.msg_iov->iov_base;
 			int len = msg->msg_len;
 			msg->msg_hdr.msg_flags = 0;
 			msg->msg_len = 0;
@@ -64,8 +65,16 @@ void thread_loop(void *userdata) {
 int main(int argc, const char *argv[])
 {
 	int packets_in_buf = 1024;
-	const char *payload = (const char[32]){0};
-	int payload_sz = 32;
+    char payload[32];
+    char key[] = "abcde123456789";
+    char values[] = "zxcvbnmasdfghj";
+    payload[0] = GET;
+    payload[1] = (unsigned char) 14;
+    payload[2] = (unsigned char) 14;
+    memcpy(&payload[3], key, payload[1]);
+    memcpy(&payload[3+payload[1]], values, payload[2]);
+    int payload_sz = payload[1] + payload[2] + 4; // 3 for three chars and 1 for terminator
+
 
 	if (argc == 1) {
 		FATAL("Usage: %s [target ip:port] [target ...]", argv[0]);

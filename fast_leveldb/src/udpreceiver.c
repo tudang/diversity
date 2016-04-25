@@ -9,8 +9,11 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+/* For LevelDB */
+#include <leveldb/c.h>
 
 #include "common.h"
+#include "application.h"
 
 
 #define MTU_SIZE (2048-64*2)
@@ -23,6 +26,10 @@ struct state {
 	struct mmsghdr messages[MAX_MSG];
 	char buffers[MAX_MSG][MTU_SIZE];
 	struct iovec iovecs[MAX_MSG];
+    leveldb_t *db;
+    leveldb_options_t *options;
+    leveldb_readoptions_t *roptions;
+    leveldb_writeoptions_t *woptions;
 } __attribute__ ((aligned (64)));
 
 struct state *state_init(struct state *s) {
@@ -38,7 +45,66 @@ struct state *state_init(struct state *s) {
 		iovec->iov_base = buf;
 		iovec->iov_len = MTU_SIZE;
 	}
+    /******************************************/
+    /* OPEN DB */
+    char *err = NULL;
+    s->options = leveldb_options_create();
+    leveldb_options_set_create_if_missing(s->options, 1);
+    s->db = leveldb_open(s->options, "/tmp/testdb", &err);
+    if (err != NULL) {
+      fprintf(stderr, "Open fail.\n");
+      exit(EXIT_FAILURE);
+    }
+    /* reset error var */
+    leveldb_free(err); err = NULL;
+    s->woptions = leveldb_writeoptions_create();
+    s->roptions = leveldb_readoptions_create();
 	return s;
+}
+
+int deliver(const char* request, void *arg, char **return_val, int *return_vsize) {
+    struct state *state = arg;
+    if (!request || request[0] == '\0') {
+        return FAILED;
+    }
+    char *err = NULL;
+    char op = request[0];
+    size_t read_len;
+    switch(op) {
+        case PUT: {
+            unsigned char ksize = request[1];
+            unsigned char vsize = request[2];
+            leveldb_put(state->db, state->woptions, &request[3], ksize, &request[3+ksize], vsize, &err);
+            if (err != NULL) {
+                leveldb_free(err); err = NULL;
+                return FAILED;
+            }
+            return SUCCESS;
+        }
+        case GET: {
+            unsigned char ksize = request[1];
+             *return_val = leveldb_get(state->db, state->roptions, &request[3], ksize, &read_len, &err);
+            if (err != NULL) {
+                leveldb_free(err); err = NULL;
+                return FAILED;
+            }
+            if (*return_val) {
+                *return_vsize = read_len;
+                return GOT_VALUE;
+            }
+            return NOT_FOUND;
+        }
+        case DELETE: {
+            unsigned char ksize = request[1];
+            leveldb_delete(state->db, state->woptions, &request[3], ksize, &err);
+            if (err != NULL) {
+                leveldb_free(err); err = NULL;
+                return FAILED;
+            }
+            return SUCCESS;
+        }
+    }
+    return INVALID_OP;
 }
 
 static void thread_loop(void *userdata)
@@ -58,7 +124,10 @@ static void thread_loop(void *userdata)
 		int i, bytes = 0;
 		for (i = 0; i < r; i++) {
 			struct mmsghdr *msg = &state->messages[i];
-			/* char *buf = msg->msg_hdr.msg_iov->iov_base; */
+			char *buf = msg->msg_hdr.msg_iov->iov_base; 
+			char *values = NULL;
+			int vsize = 0;
+			deliver(buf, state, &values, &vsize);
 			int len = msg->msg_len;
 			msg->msg_hdr.msg_flags = 0;
 			msg->msg_len = 0;
