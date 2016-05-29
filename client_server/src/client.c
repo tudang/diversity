@@ -7,7 +7,12 @@
 #include <signal.h>
 #include <time.h>
 
-void send_to_addr(int fd, struct sockaddr_in *serverAddr);
+struct client_context {
+    struct event_base *base;
+    struct sockaddr_in server_addr;
+};
+
+void send_to_addr(int fd, struct client_context *ctx);
 
 int
 timespec_diff(struct timespec *result, struct timespec *end,struct timespec *start)
@@ -22,14 +27,15 @@ timespec_diff(struct timespec *result, struct timespec *end,struct timespec *sta
 
 void handle_signal(evutil_socket_t fd, short what, void *arg)
 {
+    struct client_context *ctx = arg;
     printf("Caught SIGINT\n");
-    struct event_base *base = arg;
-    event_base_loopbreak(base);
+    event_base_loopbreak(ctx->base);
 }
 
 void on_read(evutil_socket_t fd, short event, void *arg) {
+    struct client_context *ctx = arg;
     struct sockaddr_in remote;
-    socklen_t addrlen;
+    socklen_t addrlen = sizeof(remote);
     struct timespec start;
     int n = recvfrom(fd, &start, sizeof(start), 0, (struct sockaddr*)&remote, &addrlen);
     if (n < 0)
@@ -40,7 +46,7 @@ void on_read(evutil_socket_t fd, short event, void *arg) {
     timespec_diff(&result, &end, &start);
     printf("%ld.%.9ld\n", result.tv_sec, result.tv_nsec);
 
-    send_to_addr(fd, &remote);
+    send_to_addr(fd, ctx);
 }
 
 int new_dgram_socket() {
@@ -52,47 +58,44 @@ int new_dgram_socket() {
     return s;
 }
 
-void send_to_addr(int fd, struct sockaddr_in *serverAddr) {
-    socklen_t addr_size = sizeof (*serverAddr);
+void send_to_addr(int fd, struct client_context *ctx) {
+    socklen_t addr_size = sizeof (ctx->server_addr);
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     int msg_size = sizeof ts;   
-    int n = sendto(fd , &ts, msg_size, 0, (struct sockaddr *)serverAddr, addr_size);
+    int n = sendto(fd , &ts, msg_size, 0, (struct sockaddr *)&ctx->server_addr, addr_size);
     if (n < 0) {
         perror("sendto");
-        printf("address %s, port %d\n", inet_ntoa(serverAddr->sin_addr),
-                ntohs(serverAddr->sin_port));
     }
 }
 
-void send_a_packet(int fd, char *dest) {
-    struct sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(12345);
-    serverAddr.sin_addr.s_addr = inet_addr(dest);
-    send_to_addr(fd, &serverAddr);
-}
 
 int main(int argc, char *argv[])
 {
-    struct event_base *base = event_base_new();
+    struct client_context ctx;
+    ctx.base = event_base_new();
 
     int sock = new_dgram_socket();
     evutil_make_socket_nonblocking(sock);
+
+    ctx.server_addr.sin_family = AF_INET;
+    ctx.server_addr.sin_port = htons(12345);
+    ctx.server_addr.sin_addr.s_addr = inet_addr(argv[1]);
+
     struct event *ev_read, *ev_signal;
-    ev_read = event_new(base, sock, EV_READ|EV_PERSIST, on_read, base);
+    ev_read = event_new(ctx.base, sock, EV_READ|EV_PERSIST, on_read, &ctx);
     event_add(ev_read, NULL);
 
-    ev_signal = evsignal_new(base, SIGINT, handle_signal, base);
+    ev_signal = evsignal_new(ctx.base, SIGINT, handle_signal, &ctx);
     evsignal_add(ev_signal, NULL);
 
-    send_a_packet(sock, argv[1]);
+    send_to_addr(sock, &ctx);
 
-    event_base_dispatch(base);
+    event_base_dispatch(ctx.base);
 
     event_free(ev_read);
     event_free(ev_signal);
-    event_base_free(base);
+    event_base_free(ctx.base);
 
     return 0;
 }

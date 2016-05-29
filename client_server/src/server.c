@@ -17,14 +17,19 @@ void handle_signal(evutil_socket_t fd, short what, void *arg)
 
 void on_read(evutil_socket_t fd, short event, void *arg) {
     struct sockaddr_in remote;
-    socklen_t addrlen;
-    struct timespec buf;
-    int n = recvfrom(fd, &buf, sizeof(buf), 0, (struct sockaddr*)&remote, &addrlen);
-    if (n < 0)
+    socklen_t addrlen = sizeof(remote);
+    char buf[1024];
+    int recv_bytes = recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr*)&remote, &addrlen);
+    if (recv_bytes < 0) {
         perror("recvfrom");
-    n = sendto(fd, &buf, sizeof(buf), 0, (struct sockaddr *)&remote, addrlen);
-    if (n < 0)
+        return;
+    }
+
+    int send_bytes = sendto(fd, buf, recv_bytes, 0, (struct sockaddr*)&remote, addrlen);
+    if (send_bytes < 0) {
         perror("sendto");
+        return;
+    }
 }
 
 int create_server_socket(int port) {
