@@ -85,9 +85,10 @@ int main(int argc, char *argv[])
 
     memset(&ctx.server_addr, 0, sizeof ctx.server_addr);
     ctx.server_addr.sin_family = AF_INET;
-    memcpy((char *)server->h_addr,
-      (char *)&(ctx.server_addr.sin_addr.s_addr), server->h_length);
+    memcpy((char *)&(ctx.server_addr.sin_addr.s_addr), (char *)server->h_addr, server->h_length);
     ctx.server_addr.sin_port = htons(12345);
+
+    printf("address %s, port %d\n", inet_ntoa(ctx.server_addr.sin_addr), ntohs(ctx.server_addr.sin_port));
 
     ctx.base = event_base_new();
     int sock = new_dgram_socket();
