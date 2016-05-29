@@ -8,14 +8,28 @@
 #include <errno.h>
 #include <signal.h>
 
+
+struct server_context {
+    struct event_base *base;
+    int at_second;
+    int message_per_second;
+};
+
 void handle_signal(evutil_socket_t fd, short what, void *arg)
 {
     printf("Caught SIGINT\n");
-    struct event_base *base = arg;
-    event_base_loopbreak(base);
+    struct server_context *ctx = arg;
+    event_base_loopbreak(ctx->base);
+}
+
+void on_perf(evutil_socket_t fd, short event, void *arg) {
+    struct server_context *ctx = arg;
+    printf("%4d %8d\n", ctx->at_second++, ctx->message_per_second);
+    ctx->message_per_second = 0;
 }
 
 void on_read(evutil_socket_t fd, short event, void *arg) {
+    struct server_context *ctx = arg;
     struct sockaddr_in remote;
     socklen_t addrlen = sizeof(remote);
     char buf[1024];
@@ -24,6 +38,8 @@ void on_read(evutil_socket_t fd, short event, void *arg) {
         perror("recvfrom");
         return;
     }
+
+    ctx->message_per_second++;
 
     int send_bytes = sendto(fd, buf, recv_bytes, 0, (struct sockaddr*)&remote, addrlen);
     if (send_bytes < 0) {
@@ -53,22 +69,29 @@ int create_server_socket(int port) {
 
 int main(int argc, char *argv[])
 {
-    struct event_base *base = event_base_new();
-
+    struct server_context ctx;
+    ctx.base = event_base_new();
+    ctx.at_second = 0;
+    ctx.message_per_second = 0;
     int sock = create_server_socket(12345);
     evutil_make_socket_nonblocking(sock);
-    struct event *ev_read, *ev_signal;
-    ev_read = event_new(base, sock, EV_READ|EV_PERSIST, on_read, base);
+    struct event *ev_read, *ev_perf, *ev_signal;
+    ev_read = event_new(ctx.base, sock, EV_READ|EV_PERSIST, on_read, &ctx);
     event_add(ev_read, NULL);
 
-    ev_signal = evsignal_new(base, SIGINT, handle_signal, base);
+    ev_perf = event_new(ctx.base, -1, EV_TIMEOUT|EV_PERSIST, on_perf, &ctx);
+    struct timeval one_second = {1, 0};
+    event_add(ev_perf, &one_second);
+
+    ev_signal = evsignal_new(ctx.base, SIGINT, handle_signal, &ctx);
     evsignal_add(ev_signal, NULL);
 
-    event_base_dispatch(base);
+    event_base_dispatch(ctx.base);
 
     event_free(ev_read);
+    event_free(ev_perf);
     event_free(ev_signal);
-    event_base_free(base);
+    event_base_free(ctx.base);
 
     return 0;
 }
