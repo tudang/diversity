@@ -6,6 +6,8 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <time.h>
+#include <string.h>
+
 
 struct client_context {
     struct event_base *base;
@@ -43,8 +45,8 @@ void on_read(evutil_socket_t fd, short event, void *arg) {
     struct timespec end;
     clock_gettime(CLOCK_REALTIME, &end);
     struct timespec result;
-    timespec_diff(&result, &end, &start);
-    printf("%ld.%.9ld\n", result.tv_sec, result.tv_nsec);
+    if ( timespec_diff(&result, &end, &start) < 1)
+        printf("%ld.%.9ld\n", result.tv_sec, result.tv_nsec);
 
     send_to_addr(fd, ctx);
 }
@@ -72,15 +74,24 @@ void send_to_addr(int fd, struct client_context *ctx) {
 
 int main(int argc, char *argv[])
 {
-    struct client_context ctx;
-    ctx.base = event_base_new();
+    struct hostent *server;
+    server = gethostbyname(argv[1]);
+    if (server == NULL) {
+        fprintf(stderr, "ERROR, no such host as %s\n", argv[1]);
+        return EXIT_FAILURE;
+    }
 
+    struct client_context ctx;
+
+    memset(&ctx.server_addr, 0, sizeof ctx.server_addr);
+    ctx.server_addr.sin_family = AF_INET;
+    memcpy((char *)server->h_addr,
+      (char *)&(ctx.server_addr.sin_addr.s_addr), server->h_length);
+    ctx.server_addr.sin_port = htons(12345);
+
+    ctx.base = event_base_new();
     int sock = new_dgram_socket();
     evutil_make_socket_nonblocking(sock);
-
-    ctx.server_addr.sin_family = AF_INET;
-    ctx.server_addr.sin_port = htons(12345);
-    ctx.server_addr.sin_addr.s_addr = inet_addr(argv[1]);
 
     struct event *ev_read, *ev_signal;
     ev_read = event_new(ctx.base, sock, EV_READ|EV_PERSIST, on_read, &ctx);
