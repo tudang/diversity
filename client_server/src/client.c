@@ -8,6 +8,7 @@
 #include <time.h>
 #include <string.h>
 
+#define BILLION 1000000000
 
 struct client_context {
     struct event_base *base;
@@ -20,7 +21,7 @@ int
 timespec_diff(struct timespec *result, struct timespec *end,struct timespec *start)
 {
     if (end->tv_nsec < start->tv_nsec) {
-        result->tv_nsec = 10e9 + (end->tv_nsec - start->tv_nsec);
+        result->tv_nsec =  BILLION + end->tv_nsec - start->tv_nsec;
         result->tv_sec = end->tv_sec - start->tv_sec - 1;
     } else {
         result->tv_nsec = end->tv_nsec - start->tv_nsec;
@@ -49,7 +50,8 @@ void on_read(evutil_socket_t fd, short event, void *arg) {
     clock_gettime(CLOCK_REALTIME, &end);
     struct timespec result;
     if ( timespec_diff(&result, &end, &start) < 1)
-        printf("%ld.%.9ld\n", result.tv_sec, result.tv_nsec);
+        printf("%ld.%09ld\n", result.tv_sec, result.tv_nsec);
+
 
     send_to_addr(fd, ctx);
 }
