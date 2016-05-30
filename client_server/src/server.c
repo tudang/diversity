@@ -83,9 +83,12 @@ int main(int argc, char *argv[])
     struct timeval one_second = {1, 0};
     event_add(ev_perf, &one_second);
 
-    ev_signal = evsignal_new(ctx.base, SIGINT, handle_signal, &ctx);
+    ev_signal = evsignal_new(ctx.base, SIGINT|SIGTERM, handle_signal, &ctx);
     evsignal_add(ev_signal, NULL);
-
+    event_base_priority_init(ctx.base, 4);
+    event_priority_set(ev_signal, 0);
+    event_priority_set(ev_perf, 2);
+    event_priority_set(ev_read, 3);
     event_base_dispatch(ctx.base);
 
     event_free(ev_read);

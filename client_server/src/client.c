@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
     ev_read = event_new(ctx.base, sock, EV_READ|EV_PERSIST, on_read, &ctx);
     event_add(ev_read, NULL);
 
-    ev_signal = evsignal_new(ctx.base, SIGINT, handle_signal, &ctx);
+    ev_signal = evsignal_new(ctx.base, SIGINT|SIGTERM, handle_signal, &ctx);
     evsignal_add(ev_signal, NULL);
 
     send_to_addr(sock, &ctx);
