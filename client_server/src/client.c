@@ -19,9 +19,13 @@ void send_to_addr(int fd, struct client_context *ctx);
 int
 timespec_diff(struct timespec *result, struct timespec *end,struct timespec *start)
 {
-  result->tv_sec = end->tv_sec - start->tv_sec;
-  result->tv_nsec = end->tv_nsec - start->tv_nsec;
-
+    if (end->tv_nsec < start->tv_nsec) {
+        result->tv_nsec = 10e9 + (end->tv_nsec - start->tv_nsec);
+        result->tv_sec = end->tv_sec - start->tv_sec - 1;
+    } else {
+        result->tv_nsec = end->tv_nsec - start->tv_nsec;
+        result->tv_sec = end->tv_sec - start->tv_sec;
+    }
   /* Return 1 if result is negative. */
   return end->tv_sec < start->tv_sec;
 }
@@ -30,7 +34,6 @@ timespec_diff(struct timespec *result, struct timespec *end,struct timespec *sta
 void handle_signal(evutil_socket_t fd, short what, void *arg)
 {
     struct client_context *ctx = arg;
-    printf("Caught SIGINT\n");
     event_base_loopbreak(ctx->base);
 }
 
@@ -88,7 +91,7 @@ int main(int argc, char *argv[])
     memcpy((char *)&(ctx.server_addr.sin_addr.s_addr), (char *)server->h_addr, server->h_length);
     ctx.server_addr.sin_port = htons(12345);
 
-    printf("address %s, port %d\n", inet_ntoa(ctx.server_addr.sin_addr), ntohs(ctx.server_addr.sin_port));
+    // printf("address %s, port %d\n", inet_ntoa(ctx.server_addr.sin_addr),ntohs(ctx.server_addr.sin_port));
 
     ctx.base = event_base_new();
     int sock = new_dgram_socket();

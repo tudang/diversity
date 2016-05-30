@@ -17,7 +17,6 @@ struct server_context {
 
 void handle_signal(evutil_socket_t fd, short what, void *arg)
 {
-    printf("Caught SIGINT\n");
     struct server_context *ctx = arg;
     event_base_loopbreak(ctx->base);
 }
