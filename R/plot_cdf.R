@@ -6,6 +6,8 @@ library("plyr")
 library("scales")
 library("ggplot2")
 
+args = commandArgs(trailingOnly=TRUE)
+
 my_theme <- function() {
     theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
@@ -31,4 +33,7 @@ plot_cdf <- function(fname) {
     # scale_x_continuous(limits=c(0, 1000000))
 }
 
-plot_cdf('csv/latency.csv')
+
+input_file <- ifelse(length(args)==0, "csv/latency.csv", args[1])
+print(input_file)
+plot_cdf(input_file)
