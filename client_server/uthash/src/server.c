@@ -46,6 +46,21 @@ static void handle_SIGINT(int sig, short ev, void* arg) {
     event_base_loopexit(base, NULL);
 }
 
+void respond_cb(struct proxy_server *proxy, int parm_req_id) {
+    int request_id = parm_req_id;
+    struct request_entry *s;
+    HASH_FIND_INT(proxy->request_table, &request_id, s);
+    if (s != NULL) {
+        /* This callback is invoked when there is data to read on bev. */
+        struct evbuffer *input = bufferevent_get_input(s->bev);
+        struct evbuffer *output = bufferevent_get_output(s->bev);
+        /* Copy all the data from the input buffer to the output buffer. */
+        evbuffer_add_buffer(output, input);
+        HASH_DEL(proxy->request_table, s);
+        free(s);
+    }
+}
+
 static void
 echo_read_cb(struct bufferevent *bev, void *ctx)
 {
@@ -54,15 +69,11 @@ echo_read_cb(struct bufferevent *bev, void *ctx)
     s->request_id = proxy->current_request_id;
     s->bev = bev;
     HASH_ADD_INT(proxy->request_table, request_id, s);
+
+    respond_cb(proxy, proxy->current_request_id);
+
     proxy->message_per_second++;
     proxy->current_request_id++;
-
-    /* This callback is invoked when there is data to read on bev. */
-    struct evbuffer *input = bufferevent_get_input(bev);
-    struct evbuffer *output = bufferevent_get_output(bev);
-
-    /* Copy all the data from the input buffer to the output buffer. */
-    evbuffer_add_buffer(output, input);
 }
 
 static void
