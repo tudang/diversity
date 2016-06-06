@@ -1,1 +1,0 @@
-Code copy from [majek/dump/how-to-receive-a-million-packets](https://github.com/majek/dump/tree/master/how-to-receive-a-million-packets)

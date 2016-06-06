@@ -1,6 +1,7 @@
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
+#include <event2/event.h>
 
 #include <arpa/inet.h>
 
@@ -8,16 +9,43 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <signal.h>
+
+struct stat {
+    int pps;
+    int ts;
+};
+
+static void on_stats(evutil_socket_t fd, short event, void *arg) {
+    struct stat* stat = arg;
+    fprintf(stdout, "%d %d\n", stat->ts, stat->pps);
+    stat->pps = 0;
+    stat->ts++;
+}
+
+static void handle_SIGTERM(int sig, short ev, void* arg) {
+    printf("Caught SIGTERM %d\n", sig);
+    struct event_base* base = arg;
+    event_base_loopexit(base, NULL);
+}
+
+static void handle_SIGINT(int sig, short ev, void* arg) {
+    printf("Caught SIGINT %d\n", sig);
+    struct event_base* base = arg;
+    event_base_loopexit(base, NULL);
+}
 
 static void
 echo_read_cb(struct bufferevent *bev, void *ctx)
 {
+    struct stat *stat = ctx;
     /* This callback is invoked when there is data to read on bev. */
     struct evbuffer *input = bufferevent_get_input(bev);
     struct evbuffer *output = bufferevent_get_output(bev);
 
     /* Copy all the data from the input buffer to the output buffer. */
     evbuffer_add_buffer(output, input);
+    stat->pps++;
 }
 
 static void
@@ -35,14 +63,16 @@ accept_conn_cb(struct evconnlistener *listener,
     evutil_socket_t fd, struct sockaddr *address, int socklen,
     void *ctx)
 {
+    struct stat *stat = ctx;
     /* We got a new connection! Set up a bufferevent for it. */
     struct event_base *base = evconnlistener_get_base(listener);
     struct bufferevent *bev = bufferevent_socket_new(
             base, fd, BEV_OPT_CLOSE_ON_FREE);
 
-    bufferevent_setcb(bev, echo_read_cb, NULL, echo_event_cb, NULL);
+    bufferevent_setcb(bev, echo_read_cb, NULL, echo_event_cb, stat);
 
     bufferevent_enable(bev, EV_READ|EV_WRITE);
+    bufferevent_priority_set(bev, 2);
 }
 
 static void
@@ -62,6 +92,7 @@ main(int argc, char **argv)
     struct event_base *base;
     struct evconnlistener *listener;
     struct sockaddr_in sin;
+    struct stat stat = {.pps = 0, .ts = 0};
 
     int port = 9876;
 
@@ -89,7 +120,7 @@ main(int argc, char **argv)
     /* Listen on the given port. */
     sin.sin_port = htons(port);
 
-    listener = evconnlistener_new_bind(base, accept_conn_cb, NULL,
+    listener = evconnlistener_new_bind(base, accept_conn_cb, &stat,
         LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, -1,
         (struct sockaddr*)&sin, sizeof(sin));
     if (!listener) {
@@ -97,7 +128,28 @@ main(int argc, char **argv)
         return 1;
     }
     evconnlistener_set_error_cb(listener, accept_error_cb);
+    event_base_priority_init(base, 4);
+
+    struct timeval one_second = {1, 0};
+    struct event *stats_ev = event_new(base, -1, EV_TIMEOUT|EV_PERSIST, on_stats, &stat);
+    event_add(stats_ev, &one_second);
+    event_priority_set(stats_ev, 0);
+
+    struct event *sigterm_ev = evsignal_new(base, SIGTERM, handle_SIGTERM, base);
+    evsignal_add(sigterm_ev, NULL);
+    event_priority_set(sigterm_ev, 1);
+
+    struct event *sigint_ev = evsignal_new(base, SIGINT, handle_SIGINT, base);
+    evsignal_add(sigint_ev, NULL);
+    event_priority_set(sigint_ev, 1);
 
     event_base_dispatch(base);
+
+    event_free(stats_ev);
+    event_free(sigterm_ev);
+    event_free(sigint_ev);
+    evconnlistener_free(listener);
+    event_base_free(base);
+
     return 0;
 }
