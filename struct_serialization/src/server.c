@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <signal.h>
 
+#include "message.h"
+
 struct stat {
     int pps;
     int ts;
@@ -39,12 +41,32 @@ static void
 echo_read_cb(struct bufferevent *bev, void *ctx)
 {
     struct stat *stat = ctx;
-    /* This callback is invoked when there is data to read on bev. */
     struct evbuffer *input = bufferevent_get_input(bev);
     struct evbuffer *output = bufferevent_get_output(bev);
+    /*
+    Copy all the data from the input buffer to the output buffer. 
+    */
+    // evbuffer_add_buffer(output, input);
+    
+    char buffer[128];
+    int n;
+    n = evbuffer_remove(input, buffer, sizeof(buffer));
+    if (n < 0)
+        return;
+    struct client_request *request = (struct client_request *)buffer;
+    printf("content %s\n", request->content);
+/*
+    int i;
+    for (i = 0; i < n; i++) {
+        printf("%02x ", buffer[i]);
+    }
+    printf("\n");
+*/
+    n = evbuffer_add(output, buffer, n);
+    if (n < 0) {
+        perror("evbuffer_add");
+    }
 
-    /* Copy all the data from the input buffer to the output buffer. */
-    evbuffer_add_buffer(output, input);
     stat->pps++;
 }
 

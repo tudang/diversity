@@ -8,10 +8,12 @@ find_package(LIBEVENT REQUIRED)
 
 message (STATUS "This is CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS})
 
-add_executable (server src/server.c)
+include_directories(include)
+
+add_executable (server src/server.c src/message.c)
 target_link_libraries (server ${LIBEVENT_LIBRARIES})
 set_target_properties (server PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
 
-add_executable (client src/client.c)
+add_executable (client src/client.c src/message.c)
 target_link_libraries (client ${LIBEVENT_LIBRARIES})
 set_target_properties (client PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
