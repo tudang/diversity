@@ -64,7 +64,38 @@ int create_server_socket(int port) {
     return s;
 }
 
+void subcribe_to_multicast_group(char *group, int sockfd)
+{
+    struct ip_mreq mreq;
+    mreq.imr_multiaddr.s_addr = inet_addr(group);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    if (setsockopt(sockfd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq))<0) {
+        perror("IP_ADD_MEMBERSHIP");
+        exit(EXIT_FAILURE);
+    }
+}
 
+
+/******************************************************************
+ * Checks if specified IP is multicast IP.
+ *
+ * Returns 0 if specified IP is not multicast IP, else non-zero.
+ *
+ * Parameters:
+ * ip IP to check for multicast IP, stored in network byte-order.
+ ******************************************************************/
+int net_ip__is_multicast_ip(char *ip_address)
+{
+    in_addr_t ip_in_addr = inet_addr(ip_address);
+    char *ip = (char *)&ip_in_addr;
+    int i = ip[0] & 0xFF;
+
+    if(i >=  224 && i <= 239){
+        return 1;
+    }
+
+    return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -74,6 +105,11 @@ int main(int argc, char *argv[])
     ctx.message_per_second = 0;
     int sock = create_server_socket(12345);
     evutil_make_socket_nonblocking(sock);
+
+    if (net_ip__is_multicast_ip(argv[1])) {
+        subcribe_to_multicast_group(argv[1], sock);
+    }
+
     struct event *ev_read, *ev_perf, *ev_signal;
     ev_read = event_new(ctx.base, sock, EV_READ|EV_PERSIST, on_read, &ctx);
     event_add(ev_read, NULL);
