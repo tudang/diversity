@@ -6,10 +6,13 @@ LDLIBS=-lpaxos
 SOURCES=paxos_learner.c
 EXECUTABLE=learner
 
-all: $(EXECUTABLE)
+all: $(EXECUTABLE) acceptor
 
 $(EXECUTABLE): $(SOURCES)
 	$(CC) -o $(EXECUTABLE) $< $(INCLUDES)  $(LDFLAGS) $(LDLIBS)
 
+acceptor: acceptor_test.c
+	$(CC) -o $@ $< $(INCLUDES)  $(LDFLAGS) $(LDLIBS)
+
 clean:
-	rm $(EXECUTABLE)
+	rm $(EXECUTABLE) acceptor
