@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <string.h>
 #include "acceptor.h"
+
 
 void dump_paxos_message(paxos_message *m) {
 	printf("{ .type = %d, .iid = %d, .ballot = %d, .value_ballot = %d, .value = { .len = %d, val = %s}}\n",
@@ -26,15 +28,24 @@ int main() {
 	ret = acceptor_receive_prepare(acc, &pre, &out);
 	printf("acceptor returns %d\n", ret);
 	dump_paxos_message(&out);
-	ret = acceptor_receive_accept(acc, &ack, &out);
-	printf("acceptor returns %d\n", ret);
+	memset(&out, 0, sizeof(out));
 	dump_paxos_message(&out);
 	ret = acceptor_receive_prepare(acc, &old_pre, &out);
 	printf("acceptor returns %d\n", ret);
 	dump_paxos_message(&out);
+	memset(&out, 0, sizeof(out));
+	ret = acceptor_receive_accept(acc, &ack, &out);
+	printf("acceptor returns %d\n", ret);
+	dump_paxos_message(&out);
+	memset(&out, 0, sizeof(out));
+	ret = acceptor_receive_prepare(acc, &old_pre, &out);
+	printf("acceptor returns %d\n", ret);
+	dump_paxos_message(&out);
+	memset(&out, 0, sizeof(out));
 	ret = acceptor_receive_accept(acc, &old_ack, &out);
 	printf("acceptor returns %d\n", ret);
 	dump_paxos_message(&out);
+	memset(&out, 0, sizeof(out));
 
 	acceptor_free(acc);
 	return 0;
