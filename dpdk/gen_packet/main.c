@@ -32,11 +32,15 @@
  */
 #include <stdint.h>
 #include <inttypes.h>
+#include <signal.h>
+#include <stdbool.h>
+/* dpdk */
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_cycles.h>
 #include <rte_lcore.h>
 #include <rte_mbuf.h>
+#include <rte_timer.h>
 /* librte_net */
 #include <rte_ether.h>
 #include <rte_ip.h>
@@ -52,6 +56,9 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
+
+#define TIMER_RESOLUTION_CYCLES 20000000ULL
+
 static const struct rte_eth_conf port_conf_default = {
         .rxmode = { .max_rx_pkt_len = ETHER_MAX_LEN }
 };
@@ -61,6 +68,13 @@ struct paxos_message {
     uint32_t inst;
 };
 
+static struct rte_timer timer;
+
+static struct {
+	uint64_t count;
+} stat;
+
+static bool force_quit;
 static uint16_t
 get_psd_sum(void *l3_hdr, uint16_t ethertype, uint64_t ol_flags)
 {
@@ -133,6 +147,7 @@ send_batch(struct rte_mbuf **mbufs, int count, int port_id)
     do {
         nb_tx = rte_eth_tx_burst(port_id, 0, mbufs, count);
     	rte_log(RTE_LOG_DEBUG, RTE_LOGTYPE_USER8, "Send %d messages\n", nb_tx);
+	stat.count += nb_tx;
     } while (nb_tx == count);
 }
 
@@ -201,7 +216,7 @@ port_init(uint8_t port, struct rte_mempool *mbuf_pool)
  * The lcore main. This is the main thread that does the work, reading from
  * an input port and writing to an output port.
  */
-static __attribute__((noreturn)) void
+static void
 lcore_main(void)
 {
         uint8_t port = 0;
@@ -219,11 +234,8 @@ lcore_main(void)
                         rte_lcore_id());
         /* Run until the application is quit or killed. */
         for (;;) {
-                /*
-                 * Receive packets on a port and forward them on the paired
-                 * port. The mapping is 0 -> 1, 1 -> 0, 2 -> 3, 3 -> 2, etc.
-                 */
-                 /* Get burst of RX packets, from first port of pair. */
+		if (force_quit)
+			break;
                  struct rte_mbuf *bufs[BURST_SIZE];
                  const uint16_t nb_rx = rte_eth_rx_burst(port, 0,
                                  bufs, BURST_SIZE);
@@ -235,6 +247,47 @@ lcore_main(void)
                          rte_pktmbuf_free(bufs[buf]);
         }
 }
+
+static void
+report_stat(struct rte_timer *tim, __attribute((unused)) void *arg)
+{
+	printf("%s on core %d\n", __func__, rte_lcore_id());
+	printf("Tput: %8"PRIu64 "\n", stat.count);
+	stat.count = 0;
+	if (force_quit)
+		rte_timer_stop(tim);
+}
+
+static __attribute((noreturn)) int
+lcore_mainloop(__attribute((unused)) void *arg)
+{
+	uint64_t prev_tsc = 0, cur_tsc, diff_tsc;
+	unsigned lcore_id;
+
+	lcore_id = rte_lcore_id();
+
+	rte_log(RTE_LOG_INFO, RTE_LOGTYPE_TIMER,
+		"Starting mainloop on core %u\n", lcore_id);
+	while(1) {
+		cur_tsc = rte_rdtsc();
+		diff_tsc = cur_tsc - prev_tsc;
+		if (diff_tsc > TIMER_RESOLUTION_CYCLES) {
+			rte_timer_manage();
+			prev_tsc = cur_tsc;
+		}
+	}
+}
+
+static void
+signal_handler(int signum)
+{
+	if (signum == SIGINT || signum == SIGTERM) {
+		rte_log(RTE_LOG_DEBUG, RTE_LOGTYPE_USER8,
+		"\n\nSignal %d received, preparing to exit...\n", signum);
+		force_quit = true;
+	}
+}
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
@@ -245,10 +298,18 @@ main(int argc, char *argv[])
         struct rte_mempool *mbuf_pool;
         unsigned master_core, lcore_id;
         uint8_t portid = 0;
+	force_quit = false;
         /* Initialize the Environment Abstraction Layer (EAL). */
         int ret = rte_eal_init(argc, argv);
         if (ret < 0)
                 rte_exit(EXIT_FAILURE, "Error with EAL initialization\n");
+
+	rte_timer_init(&timer);
+	uint64_t hz = rte_get_timer_hz();
+
+	signal(SIGINT, signal_handler);
+	signal(SIGTERM, signal_handler);
+
         /* Creates a new mempool in memory to hold the mbufs. */
         mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS,
                 MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
@@ -262,8 +323,14 @@ main(int argc, char *argv[])
         master_core = rte_lcore_id();
         /* slave core */
         lcore_id = rte_get_next_lcore(master_core, 0, 1);
+	rte_timer_reset(&timer, hz, PERIODICAL, lcore_id, report_stat, NULL);
+	rte_timer_subsystem_init();
+	rte_eal_remote_launch(lcore_mainloop, NULL, lcore_id);
 
-        rte_eal_remote_launch(generate_packets, mbuf_pool, lcore_id);
+        /* slave core */
+        lcore_id = rte_get_next_lcore(lcore_id, 0, 1);
+	rte_eal_remote_launch(generate_packets, mbuf_pool, lcore_id);
+
 
         /* Call lcore_main on the master core only. */
         lcore_main();
