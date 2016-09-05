@@ -124,7 +124,6 @@ add_paxos_message(struct paxos_message *pm, struct rte_mbuf *created_pkt)
                         struct paxos_message *, paxos_offset);
     rte_memcpy(px, pm, sizeof(*pm));
     created_pkt->ol_flags = ol_flags;
-    rte_eth_tx_burst(0, 0, &created_pkt, 1);
 }
 
 static void __attribute((unused))
@@ -153,7 +152,7 @@ generate_packets(__attribute__((unused)) void *arg)
         	unsigned i;
         	for (i = 0; i < BURST_SIZE; i++)
         	    add_paxos_message(&pm, bufs[i]);
-        	//send_batch(bufs, BURST_SIZE, 0);
+        	send_batch(bufs, BURST_SIZE, 0);
 	}
         return ret;
 }
