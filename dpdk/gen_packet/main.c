@@ -50,6 +50,8 @@
 #include <rte_malloc.h>
 /* logging */
 #include <rte_log.h>
+/* atomic counter */
+#include <rte_atomic.h>
 
 #define RX_RING_SIZE 128
 #define TX_RING_SIZE 512
@@ -70,9 +72,7 @@ struct paxos_message {
 
 static struct rte_timer timer;
 
-static struct {
-	uint64_t count;
-} stat;
+static rte_atomic32_t counter = RTE_ATOMIC32_INIT(0);
 
 static bool force_quit;
 static uint16_t
@@ -147,7 +147,7 @@ send_batch(struct rte_mbuf **mbufs, int count, int port_id)
     do {
         nb_tx = rte_eth_tx_burst(port_id, 0, mbufs, count);
     	rte_log(RTE_LOG_DEBUG, RTE_LOGTYPE_USER8, "Send %d messages\n", nb_tx);
-	stat.count += nb_tx;
+	rte_atomic32_add(&counter, nb_tx);
     } while (nb_tx == count);
 }
 
@@ -252,8 +252,9 @@ static void
 report_stat(struct rte_timer *tim, __attribute((unused)) void *arg)
 {
 	printf("%s on core %d\n", __func__, rte_lcore_id());
-	printf("Tput: %8"PRIu64 "\n", stat.count);
-	stat.count = 0;
+	int count = rte_atomic32_read(&counter);
+	printf("Tput: %8"PRIu32 "\n", count);
+	rte_atomic32_set(&counter, 0);
 	if (force_quit)
 		rte_timer_stop(tim);
 }
