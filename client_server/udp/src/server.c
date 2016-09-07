@@ -106,8 +106,10 @@ int main(int argc, char *argv[])
     int sock = create_server_socket(12345);
     evutil_make_socket_nonblocking(sock);
 
-    if (net_ip__is_multicast_ip(argv[1])) {
-        subcribe_to_multicast_group(argv[1], sock);
+    if (argc > 1) {
+        if (net_ip__is_multicast_ip(argv[1])) {
+            subcribe_to_multicast_group(argv[1], sock);
+        }
     }
 
     struct event *ev_read, *ev_perf, *ev_signal;
