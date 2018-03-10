@@ -1,0 +1,25 @@
+cmake_minimum_required (VERSION 2.8.4)
+project (C++Tutorial)
+
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wall -Wextra -ggdb -g")
+
+include_directories(include)
+
+message (STATUS "This is CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS})
+
+add_executable (inheritance src/inheritance.cpp)
+set_target_properties (inheritance PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (overload src/overload.cpp)
+set_target_properties (overload PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (poly src/poly.cpp)
+set_target_properties (poly PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (sorting src/sorting.cpp)
+set_target_properties (sorting PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (searching src/searching.cpp)
+set_target_properties (searching PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (tree src/tree.cpp)
+set_target_properties (tree PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (graph src/graph.cpp src/stack.cpp)
+set_target_properties (graph PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
+add_executable (hanoi_tower src/stack.cpp src/hanoi_tower.cpp)
+set_target_properties (hanoi_tower PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS})
