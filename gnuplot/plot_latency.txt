@@ -1,0 +1,14 @@
+set terminal pdf
+set output 'latency.pdf'
+set multiplot
+set termoption enhanced
+set size 1, 0.5
+set origin 0.0,0.5
+set ylabel "Latency ({/Symbol m}s)"
+set nokey
+plot 'latency.dat' with linespoints
+set origin 0.0,0.0
+set ylabel 'Throughput (Pkts / S)'
+set xlabel 'Number of Headers'
+set nokey
+plot 'throughput.dat' with linespoints

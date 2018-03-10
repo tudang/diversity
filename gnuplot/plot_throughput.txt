@@ -1,0 +1,6 @@
+set xlabel 'Number of Headers'
+set ylabel 'Throughput (Pkts / S)'
+set nokey
+set terminal pdf
+set output 'throughput.pdf'
+plot 'throughput.dat' with linespoints
