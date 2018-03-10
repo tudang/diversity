@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import threading
 
 def hello(*args, **kwargs):
