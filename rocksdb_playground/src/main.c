@@ -15,6 +15,8 @@ int done;
 int com_open PARAMS((char *));
 int com_close PARAMS((char *));
 int com_write PARAMS((char *));
+int com_wb_create PARAMS((char *));
+int com_wb_destroy PARAMS((char *));
 int com_read PARAMS((char *));
 int com_list PARAMS((char *));
 int com_delete PARAMS((char *));
@@ -31,6 +33,8 @@ typedef struct {
 COMMAND commands[] = {
     { "open", com_open, "Open a database" },
     { "write", com_write, "Write a (key,value) pair" },
+    { "wb_create", com_wb_create, "Create a writebatch" },
+    { "wb_destroy", com_wb_destroy, "Destroy the writebatch" },
     { "read", com_read, "Read the value associated with a key" },
     { "delete", com_delete, "Delete a key" },
     { "ckpt", com_checkpoint, "Create a checkpoint" },
@@ -325,6 +329,16 @@ int com_list(char *arg)
 int com_close(char *arg)
 {
     return close_db();
+}
+
+int com_wb_create(char *arg)
+{
+    return create_writebatch();
+}
+
+int com_wb_destroy(char *arg)
+{
+    return destroy_writebatch();
 }
 
 /* The user wishes to quit using this program.  Just set DONE non-zero. */

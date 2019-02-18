@@ -111,7 +111,14 @@ int handle_list(void)
         const char *key = rocksdb_iter_key(iterator, &klen);
         size_t vlen;
         const char *value = rocksdb_iter_value(iterator, &vlen);
-        printf("%-20s | %-20s\n", key, value);
+
+        char ikey[klen+1];
+        strncpy(ikey, key, klen);
+        ikey[klen] = '\0';
+        char ivalue[vlen+1];
+        strncpy(ivalue, value, vlen);
+        ivalue[vlen] = '\0';
+        printf("%-20s | %-20s\n", ikey, ivalue);
     }
     rocksdb_iter_destroy(iterator);
     return 0;
@@ -138,13 +145,18 @@ int handle_write(char *key, size_t keylen, char *val, size_t vallen)
     if (!is_open()) {
         return -1;
     }
-    char *err = NULL;
-    rocksdb_put(rocks.db, rocks.writeoptions, key, keylen, val, vallen, &err);
-    if (err != NULL) {
-        fprintf(stdout, "Write Error: %s\n", err);
-        return -1;
+
+    if (rocks.wr_batch) {
+        rocksdb_writebatch_put(rocks.wr_batch, key, keylen, val, vallen);
+    } else {
+        char *err = NULL;
+        rocksdb_put(rocks.db, rocks.writeoptions, key, keylen, val, vallen, &err);
+        if (err != NULL) {
+            fprintf(stdout, "Write Error: %s\n", err);
+            return -1;
+        }
+        fprintf(stdout, "Write <%s,%s> OK\n", key, val);
     }
-    fprintf(stdout, "Write <%s,%s> OK\n", key, val);
     return 0;
 }
 
@@ -163,5 +175,32 @@ int handle_checkpoint(char* checkpoint_dir) {
         return -1;
     }
     fprintf(stdout, "Checkpoint OK\n");
+    return 0;
+}
+
+int create_writebatch()
+{
+    rocks.wr_batch = rocksdb_writebatch_create();
+    if (!rocks.wr_batch)
+    {
+        fprintf(stderr, "Create WriteBach had problems\n");
+        return -1;
+    }
+    return 0;
+}
+
+
+int destroy_writebatch()
+{
+    if (rocks.wr_batch) {
+        char *err = NULL;
+        rocksdb_write(rocks.db, rocks.writeoptions, rocks.wr_batch, &err);
+        if (err != NULL) {
+            fprintf(stdout, "WriteBatch Error: %s\n", err);
+            return -1;
+        }
+    }
+    rocksdb_writebatch_destroy(rocks.wr_batch);
+    rocks.wr_batch = NULL;
     return 0;
 }
