@@ -13,30 +13,34 @@ struct rocksdb_params rocks;
 int done;
 
 int com_open PARAMS((char *));
+int com_close PARAMS((char *));
 int com_write PARAMS((char *));
 int com_read PARAMS((char *));
+int com_list PARAMS((char *));
 int com_delete PARAMS((char *));
 int com_checkpoint PARAMS((char *));
 int com_help PARAMS((char *));
 int com_quit PARAMS((char *));
 
 typedef struct {
-  char *name;			/* User printable name of the function. */
-  rl_icpfunc_t *func;		/* Function to call to do the job. */
-  char *doc;			/* Documentation for this function.  */
+    char *name;			/* User printable name of the function. */
+    rl_icpfunc_t *func;		/* Function to call to do the job. */
+    char *doc;			/* Documentation for this function.  */
 } COMMAND;
 
 COMMAND commands[] = {
-  { "open", com_open, "Open a database" },
-  { "write", com_write, "Write a (key,value) pair" },
-  { "read", com_read, "Read the value associated with a key" },
-  { "delete", com_delete, "Delete a key" },
-  { "ckpt", com_checkpoint, "Create a checkpoint" },
-  { "help", com_help, "Display this text" },
-  { "?", com_help, "Synonym for `help'" },
-  { "quit", com_quit, "Quit using rocks" },
-  { "exit", com_quit, "Synonym for `quit'" },
-  { (char *)NULL, (rl_icpfunc_t *)NULL, (char *)NULL }
+    { "open", com_open, "Open a database" },
+    { "write", com_write, "Write a (key,value) pair" },
+    { "read", com_read, "Read the value associated with a key" },
+    { "delete", com_delete, "Delete a key" },
+    { "ckpt", com_checkpoint, "Create a checkpoint" },
+    { "list", com_list, "List all keys and values" },
+    { "help", com_help, "Display this text" },
+    { "?", com_help, "Synonym for `help'" },
+    { "close", com_close, "Close the opened database" },
+    { "quit", com_quit, "Quit using rocks" },
+    { "exit", com_quit, "Synonym for `quit'" },
+    { (char *)NULL, (rl_icpfunc_t *)NULL, (char *)NULL }
 };
 
 /* Forward declarations */
@@ -114,51 +118,6 @@ int execute_line(char *line) {
 
     word = line + i;
 
-    /*
-
-  if (strcmp("read", argv[0]) == 0) {
-    if (count < 2) {
-      fprintf(stderr, "Not enough argument for reading\n");
-      return -1;
-    }
-    handle_read(argv[1], strlen(argv[1]));
-  }
-  else if (strcmp("delete", argv[0]) == 0) {
-    if (count < 2) {
-      fprintf(stderr, "Not enough argument for deleting\n");
-      return -1;
-    }
-    handle_delete(argv[1], strlen(argv[1]));
-  }
-  else if (strcmp("write", argv[0]) == 0) {
-    if (count < 3) {
-      fprintf(stderr, "Not enough argument for writing\n");
-      return -2;
-    }
-    handle_write(argv[1], strlen(argv[1]), argv[2], strlen(argv[2]) + 1);
-  }
-  else if (strcmp("open", argv[0]) == 0) {
-    if (count < 2) {
-      fprintf(stderr, "Missing arguments for opening database\n");
-      return -3;
-    }
-    return open_db(argv[1]);
-  }
-  else if (strcmp("close", argv[0]) == 0) {
-    return close_db();
-  }
-  else if (strcmp("checkpoint", argv[0]) == 0) {
-    if (count < 2) {
-      fprintf(stderr, "Not enough argument for checkpointing\n");
-      return -1;
-    }
-    handle_checkpoint(argv[1]);
-  }
-  else if (strcmp("help", argv[0]) == 0) {
-  }
-
-  */
-
     /* Call the function. */
     return ((*(command->func)) (word));
 }
@@ -167,20 +126,20 @@ int execute_line(char *line) {
    into STRING. */
 char * stripwhite (char *string)
 {
-  register char *s, *t;
+    register char *s, *t;
 
-  for (s = string; whitespace (*s); s++)
+    for (s = string; whitespace (*s); s++)
     ;
 
-  if (*s == 0)
-    return (s);
+    if (*s == 0)
+        return (s);
 
-  t = s + strlen (s) - 1;
-  while (t > s && whitespace (*t))
-    t--;
-  *++t = '\0';
+    t = s + strlen (s) - 1;
+    while (t > s && whitespace (*t))
+        t--;
+    *++t = '\0';
 
-  return s;
+    return s;
 }
 
 /* Look up NAME as the name of a command, and return a pointer to that
@@ -188,7 +147,6 @@ char * stripwhite (char *string)
 COMMAND* find_command (char *name)
 {
     int i;
-
     for (i = 0; commands[i].name; i++)
         if (strcmp (name, commands[i].name) == 0)
             return (&commands[i]);
@@ -210,17 +168,17 @@ COMMAND* find_command (char *name)
 char **
 rocks_completion (const char *text, int start, int end)
 {
-  char **matches;
+    char **matches;
 
-  matches = (char **)NULL;
+    matches = (char **)NULL;
 
-  /* If this word is at the start of the line, then it is a command
+    /* If this word is at the start of the line, then it is a command
      to complete.  Otherwise it is the name of a file in the current
      directory. */
-  if (start == 0)
-    matches = rl_completion_matches (text, command_generator);
+    if (start == 0)
+        matches = rl_completion_matches (text, command_generator);
 
-  return (matches);
+    return (matches);
 }
 
 /* Generator function for command completion.  STATE lets us know whether
@@ -229,29 +187,28 @@ rocks_completion (const char *text, int start, int end)
 char *
 command_generator (const char *text, int state)
 {
-  static int list_index, len;
-  char *name;
+    static int list_index, len;
+    char *name;
 
-  /* If this is a new word to complete, initialize now.  This includes
-     saving the length of TEXT for efficiency, and initializing the index
-     variable to 0. */
-  if (!state)
+    /* If this is a new word to complete, initialize now.  This includes
+       saving the length of TEXT for efficiency, and initializing the index
+       variable to 0. */
+    if (!state)
     {
-      list_index = 0;
-      len = strlen (text);
+        list_index = 0;
+        len = strlen (text);
     }
 
-  /* Return the next name which partially matches from the command list. */
-  while ((name = commands[list_index].name))
+    /* Return the next name which partially matches from the command list. */
+    while ((name = commands[list_index].name))
     {
-      list_index++;
-
-      if (strncmp (name, text, len) == 0)
-        return (strdup(name));
+        list_index++;
+        if (strncmp (name, text, len) == 0)
+            return (strdup(name));
     }
 
-  /* If no names matched, then return NULL. */
-  return ((char *)NULL);
+    /* If no names matched, then return NULL. */
+    return ((char *)NULL);
 }
 
 
@@ -262,7 +219,6 @@ void initialize_readline ()
 {
     /* Allow conditional parsing of the ~/.inputrc file. */
     rl_readline_name = "rocks";
-
     /* Tell the completer that we want a crack first. */
     rl_attempted_completion_function = rocks_completion;
 }
@@ -271,7 +227,6 @@ int com_open(char *arg)
 {
     if (invalid_argument("open", arg))
         return -1;
-
     return open_db(arg);
 }
 
@@ -279,7 +234,6 @@ int com_read(char *arg)
 {
     if (invalid_argument("read", arg))
         return -1;
-
     return handle_read(arg, strlen(arg));
 }
 
@@ -288,13 +242,9 @@ int com_write(char *arg)
 {
     if (invalid_argument("write", arg))
         return -1;
-
-    printf("Write arg: %s\n", arg);
-
     const char s[2] = " ";
     char *key;
     char *value;
-    char *token;
     /* get the first token */
     key = strtok(arg, s);
 
@@ -302,20 +252,13 @@ int com_write(char *arg)
         fprintf(stderr, "Key is empty\n");
         return -1;
     }
-
     value = strtok(NULL, s);
-
     if (value == NULL) {
         fprintf(stderr, "Value is empty\n");
         return -1;
     }
 
     return handle_write(key, strlen(key), value, strlen(value) + 1);
-
-    /* walk through other tokens */
-    while( token != NULL ) {
-       token = strtok(NULL, s);
-    }
 
     return 0;
 }
@@ -325,7 +268,6 @@ int com_delete(char *arg)
 {
     if (invalid_argument("delete", arg))
         return -1;
-
     return handle_delete(arg, strlen(arg));
 }
 
@@ -333,7 +275,6 @@ int com_checkpoint(char *arg)
 {
     if (invalid_argument("checkpoint", arg))
         return -1;
-
     return handle_checkpoint(arg);
 }
 
@@ -341,39 +282,49 @@ int com_checkpoint(char *arg)
    not present. */
 int com_help (char *arg)
 {
-  register int i;
-  int printed = 0;
+    register int i;
+    int printed = 0;
 
-  for (i = 0; commands[i].name; i++)
+    for (i = 0; commands[i].name; i++)
     {
-      if (!*arg || (strcmp (arg, commands[i].name) == 0))
+        if (!*arg || (strcmp (arg, commands[i].name) == 0))
         {
-          printf ("%s\t\t%s.\n", commands[i].name, commands[i].doc);
-          printed++;
-      }
+            printf ("%s\t\t%s.\n", commands[i].name, commands[i].doc);
+            printed++;
+        }
     }
 
-  if (!printed)
+    if (!printed)
     {
-      printf ("No commands match `%s'.  Possibilties are:\n", arg);
+        printf ("No commands match `%s'.  Possibilties are:\n", arg);
 
-      for (i = 0; commands[i].name; i++)
+    for (i = 0; commands[i].name; i++)
+    {
+        /* Print in six columns. */
+        if (printed == 6)
         {
-          /* Print in six columns. */
-          if (printed == 6)
-            {
-              printed = 0;
-              printf ("\n");
-            }
-
-          printf ("%s\t", commands[i].name);
-          printed++;
+            printed = 0;
+            printf ("\n");
         }
 
-      if (printed)
-        printf ("\n");
+        printf ("%s\t", commands[i].name);
+            printed++;
+        }
+
+        if (printed)
+            printf ("\n");
     }
-  return 0;
+    return 0;
+}
+
+int com_list(char *arg)
+{
+    return handle_list();
+}
+
+int com_close(char *arg)
+{
+    return close_db();
 }
 
 /* The user wishes to quit using this program.  Just set DONE non-zero. */
