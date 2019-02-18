@@ -11,7 +11,10 @@ struct rocksdb_params {
 
 void init_rocksdb(void);
 int deconstruct(void);
-int parse_lineinput(char *lineinput, char* *array, int *count);
-int handle_requests(char** array, int count);
+int open_db(char* db_path);
+int handle_read(char *key, size_t keylen);
+int handle_write(char *key, size_t keylen, char *val, size_t vallen);
+int handle_delete(char *key, size_t keylen);
+int handle_checkpoint(char* checkpoint_dir);
 
 extern struct rocksdb_params rocks;
